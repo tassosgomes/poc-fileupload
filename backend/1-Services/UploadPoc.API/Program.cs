@@ -1,4 +1,5 @@
 using System.Text;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -8,6 +9,9 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using UploadPoc.API.Middleware;
 using UploadPoc.API.Services;
+using UploadPoc.Application.Commands;
+using UploadPoc.Application.Handlers;
+using UploadPoc.Application.Validators;
 using UploadPoc.Domain.Interfaces;
 using UploadPoc.Infra.Messaging;
 using UploadPoc.Infra.Persistence;
@@ -133,6 +137,9 @@ builder.Services.AddHealthChecks()
     });
 
 builder.Services.AddScoped<IFileUploadRepository, FileUploadRepository>();
+builder.Services.AddScoped<RegisterUploadHandler>();
+builder.Services.AddScoped<CancelUploadHandler>();
+builder.Services.AddScoped<IValidator<RegisterUploadCommand>, RegisterUploadValidator>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddHostedService<RabbitMqConsumerHostedService>();
 

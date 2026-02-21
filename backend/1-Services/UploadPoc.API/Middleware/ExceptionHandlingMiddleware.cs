@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 
 namespace UploadPoc.API.Middleware;
 
@@ -30,10 +31,22 @@ public sealed class ExceptionHandlingMiddleware
     {
         var (status, title, detail) = exception switch
         {
+            ValidationException validationException => (
+                StatusCodes.Status400BadRequest,
+                "Bad Request",
+                string.Join("; ", validationException.Errors.Select(error => error.ErrorMessage))),
             UnauthorizedAccessException => (
                 StatusCodes.Status401Unauthorized,
                 "Unauthorized",
                 "Authentication is required to access this resource."),
+            KeyNotFoundException => (
+                StatusCodes.Status404NotFound,
+                "Not Found",
+                exception.Message),
+            InvalidOperationException => (
+                StatusCodes.Status400BadRequest,
+                "Bad Request",
+                exception.Message),
             ArgumentException => (
                 StatusCodes.Status400BadRequest,
                 "Bad Request",
