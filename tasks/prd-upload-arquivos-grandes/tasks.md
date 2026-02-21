@@ -42,7 +42,7 @@ Kubernetes YAMLs e testes unitários. Podem ser executadas em **paralelo**.
 - [x] 8.0 Upload TUS — Backend (F03)
 - [x] 9.0 Consumer de Integridade SHA-256 (F02 — Continuação)
 - [x] 10.0 Listagem e Download de Arquivos (F05)
-- [ ] 11.0 Detecção e Limpeza de Dados Órfãos (F06)
+- [x] 11.0 Detecção e Limpeza de Dados Órfãos (F06)
 - [ ] 12.0 Frontend — Setup, Auth e Componentes Compartilhados
 - [ ] 13.0 Frontend — Upload TUS
 - [ ] 14.0 Frontend — Upload MinIO

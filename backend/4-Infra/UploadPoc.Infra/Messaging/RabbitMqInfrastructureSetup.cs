@@ -38,5 +38,6 @@ internal static class RabbitMqInfrastructureSetup
 
         channel.QueueBind(UploadCompletedQueue, UploadEventsExchange, UploadCompletedRoutingKey);
         channel.QueueBind(UploadCompletedDeadLetterQueue, DeadLetterExchange, UploadCompletedRoutingKey);
+        channel.QueueBind(UploadCompletedDeadLetterQueue, DeadLetterExchange, UploadTimeoutRoutingKey);
     }
 }

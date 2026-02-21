@@ -12,5 +12,7 @@ public interface IFileUploadRepository
 
     Task<IReadOnlyList<FileUpload>> GetPendingOlderThanAsync(TimeSpan age, CancellationToken cancellationToken);
 
+    Task<bool> ExistsByStorageKeyAsync(string storageKey, CancellationToken cancellationToken);
+
     Task UpdateAsync(FileUpload upload, CancellationToken cancellationToken);
 }

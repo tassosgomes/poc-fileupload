@@ -60,7 +60,11 @@ public sealed class RabbitMqPublisher : IEventPublisher, IDisposable
 
     public async Task PublishUploadCompletedAsync(UploadCompletedEvent @event, CancellationToken cancellationToken)
     {
-        await PublishAsync(@event, RabbitMqInfrastructureSetup.UploadCompletedRoutingKey, cancellationToken);
+        await PublishAsync(
+            @event,
+            RabbitMqInfrastructureSetup.UploadEventsExchange,
+            RabbitMqInfrastructureSetup.UploadCompletedRoutingKey,
+            cancellationToken);
     }
 
     public async Task PublishUploadTimeoutAsync(Guid uploadId, CancellationToken cancellationToken)
@@ -71,7 +75,11 @@ public sealed class RabbitMqPublisher : IEventPublisher, IDisposable
             timestamp = DateTime.UtcNow
         };
 
-        await PublishAsync(timeoutPayload, RabbitMqInfrastructureSetup.UploadTimeoutRoutingKey, cancellationToken);
+        await PublishAsync(
+            timeoutPayload,
+            RabbitMqInfrastructureSetup.DeadLetterExchange,
+            RabbitMqInfrastructureSetup.UploadTimeoutRoutingKey,
+            cancellationToken);
     }
 
     public void Dispose()
@@ -93,18 +101,22 @@ public sealed class RabbitMqPublisher : IEventPublisher, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private async Task PublishAsync(object payload, string routingKey, CancellationToken cancellationToken)
+    private async Task PublishAsync(
+        object payload,
+        string exchange,
+        string routingKey,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         await _retryPolicy.ExecuteAsync(async ct =>
         {
-            PublishInternal(payload, routingKey, ct);
+            PublishInternal(payload, exchange, routingKey, ct);
             await Task.CompletedTask;
         }, cancellationToken);
     }
 
-    private void PublishInternal(object payload, string routingKey, CancellationToken cancellationToken)
+    private void PublishInternal(object payload, string exchange, string routingKey, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -123,7 +135,7 @@ public sealed class RabbitMqPublisher : IEventPublisher, IDisposable
             properties.ContentType = "application/json";
 
             _channel.BasicPublish(
-                exchange: RabbitMqInfrastructureSetup.UploadEventsExchange,
+                exchange: exchange,
                 routingKey: routingKey,
                 mandatory: true,
                 basicProperties: properties,

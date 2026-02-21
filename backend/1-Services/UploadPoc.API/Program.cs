@@ -19,6 +19,7 @@ using UploadPoc.Application.Commands;
 using UploadPoc.Application.Consumers;
 using UploadPoc.Application.Dtos;
 using UploadPoc.Application.Handlers;
+using UploadPoc.Application.Jobs;
 using UploadPoc.Application.Validators;
 using UploadPoc.Domain.Interfaces;
 using UploadPoc.Infra.Messaging;
@@ -155,6 +156,7 @@ builder.Services.AddScoped<CancelUploadHandler>();
 builder.Services.AddScoped<ListUploadsHandler>();
 builder.Services.AddScoped<GetDownloadUrlHandler>();
 builder.Services.AddScoped<UploadCompletedConsumer>();
+builder.Services.AddScoped<UploadCompletedDlqConsumer>();
 builder.Services.AddScoped<IValidator<RegisterUploadCommand>, RegisterUploadValidator>();
 builder.Services.AddScoped<IValidator<CompleteMinioRequest>, CompleteMinioValidator>();
 builder.Services.AddSingleton<IChecksumService, Sha256ChecksumService>();
@@ -165,6 +167,7 @@ builder.Services.AddKeyedSingleton<IStorageService>("minio", static (serviceProv
     serviceProvider.GetRequiredService<MinioStorageService>());
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddHostedService<RabbitMqConsumerHostedService>();
+builder.Services.AddHostedService<OrphanCleanupJob>();
 
 var app = builder.Build();
 

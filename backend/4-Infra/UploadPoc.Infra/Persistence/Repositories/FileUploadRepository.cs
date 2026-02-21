@@ -45,6 +45,13 @@ public class FileUploadRepository : IFileUploadRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<bool> ExistsByStorageKeyAsync(string storageKey, CancellationToken cancellationToken)
+    {
+        return await _context.FileUploads
+            .AsNoTracking()
+            .AnyAsync(fileUpload => fileUpload.StorageKey == storageKey, cancellationToken);
+    }
+
     public async Task UpdateAsync(FileUpload upload, CancellationToken cancellationToken)
     {
         _context.FileUploads.Update(upload);

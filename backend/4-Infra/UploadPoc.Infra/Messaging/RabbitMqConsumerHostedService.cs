@@ -101,10 +101,18 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
         var asyncConsumer = new AsyncEventingBasicConsumer(_channel);
         asyncConsumer.Received += async (_, eventArgs) => await HandleMessageAsync(eventArgs, cancellationToken);
 
+        var dlqConsumer = new AsyncEventingBasicConsumer(_channel);
+        dlqConsumer.Received += async (_, eventArgs) => await HandleDlqMessageAsync(eventArgs, cancellationToken);
+
         _channel.BasicConsume(
             queue: RabbitMqInfrastructureSetup.UploadCompletedQueue,
             autoAck: false,
             consumer: asyncConsumer);
+
+        _channel.BasicConsume(
+            queue: RabbitMqInfrastructureSetup.UploadCompletedDeadLetterQueue,
+            autoAck: false,
+            consumer: dlqConsumer);
 
         while (!cancellationToken.IsCancellationRequested && _channel.IsOpen && _connection?.IsOpen == true)
         {
@@ -170,6 +178,33 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
                 "Error processing upload.completed message. DeliveryTag={DeliveryTag}. Max attempts reached ({MaxDeliveryAttempts}), sending to DLQ.",
                 eventArgs.DeliveryTag,
                 MaxDeliveryAttempts);
+
+            _channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
+        }
+    }
+
+    private async Task HandleDlqMessageAsync(BasicDeliverEventArgs eventArgs, CancellationToken cancellationToken)
+    {
+        if (_channel is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var scope = _serviceScopeFactory.CreateScope();
+            var dlqConsumer = scope.ServiceProvider.GetRequiredService<UploadCompletedDlqConsumer>();
+
+            await dlqConsumer.ProcessAsync(eventArgs.Body, cancellationToken);
+
+            _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Error processing DLQ message. DeliveryTag={DeliveryTag}",
+                eventArgs.DeliveryTag);
 
             _channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
         }
