@@ -228,3 +228,53 @@ td {
 .status-neutral {
   color: #4b5563;
 }
+
+.file-list-section {
+  display: grid;
+  gap: 16px;
+}
+
+.file-list-section h2 {
+  margin: 0;
+}
+
+.file-list-table-wrapper {
+  overflow-x: auto;
+}
+
+.sha-cell {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.875rem;
+}
+
+.status-badge {
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 90px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.status-badge-pending {
+  background: #d97706;
+}
+
+.status-badge-completed {
+  background: #059669;
+}
+
+.status-badge-corrupted {
+  background: #dc2626;
+}
+
+.status-badge-cancelled {
+  background: #6b7280;
+}
+
+.status-badge-failed {
+  background: #7f1d1d;
+}
