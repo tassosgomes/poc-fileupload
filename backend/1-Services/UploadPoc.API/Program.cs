@@ -1,4 +1,13 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Formatting.Compact;
+using UploadPoc.API.Middleware;
+using UploadPoc.API.Services;
 using UploadPoc.Domain.Interfaces;
 using UploadPoc.Infra.Messaging;
 using UploadPoc.Infra.Persistence;
@@ -6,15 +15,130 @@ using UploadPoc.Infra.Persistence.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console(new CompactJsonFormatter())
+    .Enrich.WithProperty("service.name", "upload-poc")
+    .CreateLogger();
+
+builder.Host.UseSerilog((context, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .WriteTo.Console(new CompactJsonFormatter())
+        .Enrich.WithProperty("service.name", "upload-poc");
+});
+
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Use: Bearer {token}"
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+var jwtSecret = builder.Configuration["Jwt:Secret"]
+    ?? throw new InvalidOperationException("Missing Jwt:Secret configuration.");
+
+if (jwtSecret.Length < 32)
+{
+    throw new InvalidOperationException("Jwt:Secret must have at least 32 characters.");
+}
+
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "upload-poc";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "upload-poc";
+var expirationHours = builder.Configuration.GetValue("Jwt:ExpirationHours", 8);
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
+
+builder.Services.AddSingleton(new JwtService(jwtSecret, jwtIssuer, jwtAudience, expirationHours));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            RequireExpirationTime = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = signingKey,
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+            ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+
+                var problemDetails = new ProblemDetails
+                {
+                    Type = "https://datatracker.ietf.org/doc/html/rfc9457",
+                    Title = "Unauthorized",
+                    Status = StatusCodes.Status401Unauthorized,
+                    Detail = "A valid Bearer token is required.",
+                    Instance = context.Request.Path
+                };
+
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/problem+json";
+                await context.Response.WriteAsJsonAsync(problemDetails);
+            }
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddHealthChecks()
+    .AddNpgSql(builder.Configuration.GetConnectionString("DefaultConnection")!, name: "postgresql")
+    .AddRabbitMQ(
+        rabbitConnectionString: BuildRabbitMqConnectionString(builder.Configuration),
+        name: "rabbitmq")
+    .AddAsyncCheck("minio", async cancellationToken =>
+    {
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        using var response = await httpClient.GetAsync(BuildMinioHealthUri(builder.Configuration), cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? HealthCheckResult.Healthy("MinIO is reachable.")
+            : HealthCheckResult.Unhealthy($"MinIO health endpoint returned HTTP {(int)response.StatusCode}.");
+    });
+
 builder.Services.AddScoped<IFileUploadRepository, FileUploadRepository>();
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddHostedService<RabbitMqConsumerHostedService>();
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -25,6 +149,34 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapGet("/", () => Results.Ok(new { message = "UploadPoc API is running." }));
+app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();
+
+static string BuildRabbitMqConnectionString(IConfiguration configuration)
+{
+    var host = configuration["RabbitMQ:Host"] ?? "localhost";
+    var port = configuration["RabbitMQ:Port"] ?? "5672";
+    var username = configuration["RabbitMQ:Username"] ?? "guest";
+    var password = configuration["RabbitMQ:Password"] ?? "guest";
+
+    return $"amqp://{Uri.EscapeDataString(username)}:{Uri.EscapeDataString(password)}@{host}:{port}";
+}
+
+static Uri BuildMinioHealthUri(IConfiguration configuration)
+{
+    var endpoint = configuration["MinIO:Endpoint"] ?? "localhost:9000";
+    var useSsl = configuration.GetValue("MinIO:UseSSL", false);
+    var protocol = useSsl ? "https" : "http";
+    var normalizedEndpoint = endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                             endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+        ? endpoint
+        : $"{protocol}://{endpoint}";
+
+    return new Uri($"{normalizedEndpoint.TrimEnd('/')}/minio/health/live");
+}

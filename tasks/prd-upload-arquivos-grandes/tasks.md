@@ -36,7 +36,7 @@ Kubernetes YAMLs e testes unitários. Podem ser executadas em **paralelo**.
 - [x] 2.0 Camada Domain — Entidades, Enums e Interfaces
 - [x] 3.0 Camada Infra — PostgreSQL e EF Core
 - [x] 4.0 Infra Layer — RabbitMQ (Publisher, Consumer, DLQ)
-- [ ] 5.0 Autenticação JWT (F01)
+- [x] 5.0 Autenticação JWT (F01)
 - [ ] 6.0 Registro de Metadados e Cancelamento (F02 — Base)
 - [ ] 7.0 Upload MinIO — Backend (F04)
 - [ ] 8.0 Upload TUS — Backend (F03)
