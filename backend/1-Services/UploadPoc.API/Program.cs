@@ -152,6 +152,8 @@ builder.Services.AddScoped<RegisterUploadHandler>();
 builder.Services.AddScoped<InitiateMinioUploadHandler>();
 builder.Services.AddScoped<CompleteUploadHandler>();
 builder.Services.AddScoped<CancelUploadHandler>();
+builder.Services.AddScoped<ListUploadsHandler>();
+builder.Services.AddScoped<GetDownloadUrlHandler>();
 builder.Services.AddScoped<UploadCompletedConsumer>();
 builder.Services.AddScoped<IValidator<RegisterUploadCommand>, RegisterUploadValidator>();
 builder.Services.AddScoped<IValidator<CompleteMinioRequest>, CompleteMinioValidator>();

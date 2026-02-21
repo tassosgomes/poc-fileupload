@@ -13,6 +13,8 @@ public interface IStorageService
         int totalParts,
         CancellationToken cancellationToken);
 
+    string GeneratePresignedDownloadUrl(string key, string? fileName = null);
+
     Task CompleteMultipartUploadAsync(
         string bucketName,
         string key,

@@ -33,6 +33,11 @@ public sealed class TusDiskStorageService : IStorageService
         throw new NotSupportedException("Presigned URLs are not supported for TUS disk storage.");
     }
 
+    public string GeneratePresignedDownloadUrl(string key, string? fileName = null)
+    {
+        throw new NotSupportedException("Presigned download URLs are not supported for TUS disk storage.");
+    }
+
     public Task CompleteMultipartUploadAsync(
         string bucketName,
         string key,

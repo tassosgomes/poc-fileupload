@@ -14,6 +14,7 @@ public sealed class MinioStorageService : IStorageService
 {
     private const int MaxRetryAttempts = 3;
     private const int PresignedUrlExpiryHours = 24;
+    private const int PresignedDownloadUrlExpiryHours = 1;
 
     private readonly IAmazonS3 _s3Client;
     private readonly IChecksumService _checksumService;
@@ -168,6 +169,28 @@ public sealed class MinioStorageService : IStorageService
         }
 
         return Task.FromResult<IReadOnlyList<string>>(urls);
+    }
+
+    public string GeneratePresignedDownloadUrl(string key, string? fileName = null)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new ArgumentException("Storage key cannot be null or whitespace.", nameof(key));
+        }
+
+        var resolvedFileName = string.IsNullOrWhiteSpace(fileName) ? Path.GetFileName(key) : fileName.Trim();
+
+        return _s3Client.GetPreSignedURL(new GetPreSignedUrlRequest
+        {
+            BucketName = BucketName,
+            Key = key,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.AddHours(PresignedDownloadUrlExpiryHours),
+            ResponseHeaderOverrides = new ResponseHeaderOverrides
+            {
+                ContentDisposition = $"attachment; filename=\"{resolvedFileName}\""
+            }
+        });
     }
 
     public async Task CompleteMultipartUploadAsync(
