@@ -35,7 +35,7 @@ Kubernetes YAMLs e testes unitários. Podem ser executadas em **paralelo**.
 - [x] 1.0 Scaffolding do Projeto e Docker Compose
 - [x] 2.0 Camada Domain — Entidades, Enums e Interfaces
 - [x] 3.0 Camada Infra — PostgreSQL e EF Core
-- [ ] 4.0 Camada Infra — RabbitMQ (Publisher, Consumer, DLQ)
+- [x] 4.0 Infra Layer — RabbitMQ (Publisher, Consumer, DLQ)
 - [ ] 5.0 Autenticação JWT (F01)
 - [ ] 6.0 Registro de Metadados e Cancelamento (F02 — Base)
 - [ ] 7.0 Upload MinIO — Backend (F04)

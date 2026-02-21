@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\..\2-Application\UploadPoc.Application\UploadPoc.Application.csproj" />
     <ProjectReference Include="..\..\3-Domain\UploadPoc.Domain\UploadPoc.Domain.csproj" />
   </ItemGroup>
 

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using UploadPoc.Domain.Interfaces;
+using UploadPoc.Infra.Messaging;
 using UploadPoc.Infra.Persistence;
 using UploadPoc.Infra.Persistence.Repositories;
 
@@ -10,6 +11,8 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddScoped<IFileUploadRepository, FileUploadRepository>();
+builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
+builder.Services.AddHostedService<RabbitMqConsumerHostedService>();
 
 var app = builder.Build();
 
