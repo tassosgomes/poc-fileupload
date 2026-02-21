@@ -45,7 +45,7 @@ Kubernetes YAMLs e testes unitários. Podem ser executadas em **paralelo**.
 - [x] 11.0 Detecção e Limpeza de Dados Órfãos (F06)
 - [x] 12.0 Frontend — Setup, Auth e Componentes Compartilhados
 - [x] 13.0 Frontend — Upload TUS
-- [ ] 14.0 Frontend — Upload MinIO
+- [x] 14.0 Frontend — Upload MinIO
 - [ ] 15.0 Frontend — Listagem e Download
 - [ ] 16.0 Kubernetes YAMLs (F07)
 - [ ] 17.0 Testes Unitários

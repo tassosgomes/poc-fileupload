@@ -142,9 +142,20 @@ td {
   text-align: left;
 }
 
-.tus-upload-page {
+.tus-upload-page,
+.minio-upload-page {
   display: grid;
   gap: 16px;
+}
+
+.file-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.file-picker span {
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .file-input-hidden {
