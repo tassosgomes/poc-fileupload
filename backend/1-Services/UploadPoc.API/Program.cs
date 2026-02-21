@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -7,6 +8,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Formatting.Compact;
+using tusdotnet;
+using tusdotnet.Models.Configuration;
+using tusdotnet.Models;
+using tusdotnet.Stores;
+using UploadPoc.Domain.Events;
 using UploadPoc.API.Middleware;
 using UploadPoc.API.Services;
 using UploadPoc.Application.Commands;
@@ -77,6 +83,7 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "upload-poc";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "upload-poc";
 var expirationHours = builder.Configuration.GetValue("Jwt:ExpirationHours", 8);
 var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
+var tusStoragePath = builder.Configuration["TusStorage:Path"] ?? "/app/uploads";
 
 builder.Services.AddSingleton(new JwtService(jwtSecret, jwtIssuer, jwtAudience, expirationHours));
 
@@ -149,6 +156,7 @@ builder.Services.AddScoped<IValidator<CompleteMinioRequest>, CompleteMinioValida
 builder.Services.AddSingleton<IChecksumService, Sha256ChecksumService>();
 builder.Services.AddSingleton<MinioStorageService>();
 builder.Services.AddSingleton<IStorageService>(serviceProvider => serviceProvider.GetRequiredService<MinioStorageService>());
+builder.Services.AddKeyedSingleton<IStorageService, TusDiskStorageService>("tus-disk");
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddHostedService<RabbitMqConsumerHostedService>();
 
@@ -172,6 +180,115 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Ok(new { message = "UploadPoc API is running." }));
+app.MapTus("/upload/tus", _ =>
+{
+    var configuration = new DefaultTusConfiguration
+    {
+        Store = new TusDiskStore(tusStoragePath),
+        MetadataParsingStrategy = MetadataParsingStrategy.AllowEmptyValues,
+        MaxAllowedUploadSizeInBytesLong = 300L * 1024 * 1024 * 1024,
+        Events = new Events
+        {
+            OnAuthorizeAsync = eventContext =>
+            {
+                var authorization = eventContext.HttpContext.Request.Headers.Authorization.ToString();
+                if (string.IsNullOrWhiteSpace(authorization)
+                    || !authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    eventContext.FailRequest(HttpStatusCode.Unauthorized);
+                    return Task.CompletedTask;
+                }
+
+                var token = authorization["Bearer ".Length..].Trim();
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    eventContext.FailRequest(HttpStatusCode.Unauthorized);
+                    return Task.CompletedTask;
+                }
+
+                var jwtService = eventContext.HttpContext.RequestServices.GetRequiredService<JwtService>();
+                var principal = jwtService.ValidateToken(token);
+                if (principal is null)
+                {
+                    eventContext.FailRequest(HttpStatusCode.Unauthorized);
+                    return Task.CompletedTask;
+                }
+
+                eventContext.HttpContext.User = principal;
+                return Task.CompletedTask;
+            },
+            OnCreateCompleteAsync = async eventContext =>
+            {
+                if (!TryGetUploadId(eventContext.Metadata, out var uploadId))
+                {
+                    return;
+                }
+
+                var repository = eventContext.HttpContext.RequestServices.GetRequiredService<IFileUploadRepository>();
+                var upload = await repository.GetByIdAsync(uploadId, eventContext.CancellationToken);
+                if (upload is null)
+                {
+                    return;
+                }
+
+                upload.SetStorageKey(eventContext.FileId);
+                await repository.UpdateAsync(upload, eventContext.CancellationToken);
+            },
+            OnFileCompleteAsync = async eventContext =>
+            {
+                var logger = eventContext.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                var repository = eventContext.HttpContext.RequestServices.GetRequiredService<IFileUploadRepository>();
+                var publisher = eventContext.HttpContext.RequestServices.GetRequiredService<IEventPublisher>();
+
+                var file = await eventContext.GetFileAsync();
+                if (file is null)
+                {
+                    logger.LogWarning("TUS completion callback could not resolve file for FileId {FileId}.", eventContext.FileId);
+                    return;
+                }
+
+                var metadata = await file.GetMetadataAsync(eventContext.CancellationToken);
+                if (!TryGetUploadId(metadata, out var uploadId))
+                {
+                    logger.LogWarning("TUS completion callback missing uploadId metadata for FileId {FileId}.", eventContext.FileId);
+                    return;
+                }
+
+                var upload = await repository.GetByIdAsync(uploadId, eventContext.CancellationToken);
+                if (upload is null)
+                {
+                    logger.LogWarning("Upload {UploadId} was not found when processing TUS file completion.", uploadId);
+                    return;
+                }
+
+                if (!string.Equals(upload.StorageKey, eventContext.FileId, StringComparison.Ordinal))
+                {
+                    upload.SetStorageKey(eventContext.FileId);
+                }
+
+                await repository.UpdateAsync(upload, eventContext.CancellationToken);
+
+                await publisher.PublishUploadCompletedAsync(
+                    new UploadCompletedEvent(
+                        upload.Id,
+                        eventContext.FileId,
+                        upload.ExpectedSha256,
+                        "TUS",
+                        DateTime.UtcNow),
+                    eventContext.CancellationToken);
+
+                var durationMs = Math.Max(0, (DateTime.UtcNow - upload.CreatedAt).TotalMilliseconds);
+                logger.LogInformation(
+                    "TUS upload completed. UploadId={UploadId} FileName={FileName} DurationMs={DurationMs}",
+                    upload.Id,
+                    upload.FileName,
+                    durationMs);
+            }
+        }
+    };
+
+    return Task.FromResult(configuration);
+});
 app.MapControllers();
 app.MapHealthChecks("/health");
 
@@ -198,4 +315,17 @@ static Uri BuildMinioHealthUri(IConfiguration configuration)
         : $"{protocol}://{endpoint}";
 
     return new Uri($"{normalizedEndpoint.TrimEnd('/')}/minio/health/live");
+}
+
+static bool TryGetUploadId(IReadOnlyDictionary<string, Metadata> metadata, out Guid uploadId)
+{
+    uploadId = Guid.Empty;
+
+    if (!metadata.TryGetValue("uploadId", out var uploadIdMetadata) || uploadIdMetadata.HasEmptyValue)
+    {
+        return false;
+    }
+
+    var uploadIdText = uploadIdMetadata.GetString(Encoding.UTF8);
+    return Guid.TryParse(uploadIdText, out uploadId);
 }

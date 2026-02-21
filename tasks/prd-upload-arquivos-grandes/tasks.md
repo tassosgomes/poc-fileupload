@@ -39,7 +39,7 @@ Kubernetes YAMLs e testes unitários. Podem ser executadas em **paralelo**.
 - [x] 5.0 Autenticação JWT (F01)
 - [x] 6.0 Registro de Metadados e Cancelamento (F02 — Base)
 - [x] 7.0 Upload MinIO — Backend (F04)
-- [ ] 8.0 Upload TUS — Backend (F03)
+- [x] 8.0 Upload TUS — Backend (F03)
 - [ ] 9.0 Consumer de Integridade SHA-256 (F02 — Continuação)
 - [ ] 10.0 Listagem e Download de Arquivos (F05)
 - [ ] 11.0 Detecção e Limpeza de Dados Órfãos (F06)

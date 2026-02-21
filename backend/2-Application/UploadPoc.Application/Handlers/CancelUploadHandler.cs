@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UploadPoc.Application.Commands;
 using UploadPoc.Domain.Enums;
@@ -9,16 +10,19 @@ public sealed class CancelUploadHandler
 {
     private readonly IFileUploadRepository _repository;
     private readonly IStorageService? _storageService;
+    private readonly IKeyedServiceProvider? _keyedServiceProvider;
     private readonly ILogger<CancelUploadHandler> _logger;
 
     public CancelUploadHandler(
         IFileUploadRepository repository,
         ILogger<CancelUploadHandler> logger,
-        IStorageService? storageService = null)
+        IStorageService? storageService = null,
+        IKeyedServiceProvider? keyedServiceProvider = null)
     {
         _repository = repository;
         _logger = logger;
         _storageService = storageService;
+        _keyedServiceProvider = keyedServiceProvider;
     }
 
     public async Task HandleAsync(CancelUploadCommand command, CancellationToken cancellationToken)
@@ -57,6 +61,31 @@ public sealed class CancelUploadHandler
                     _logger.LogWarning(
                         "Cannot abort MinIO multipart upload {UploadId}. StorageKey or MinioUploadId is missing.",
                         upload.Id);
+                }
+            }
+        }
+        else if (upload.UploadScenario.Equals("TUS", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(upload.StorageKey))
+            {
+                _logger.LogWarning(
+                    "Cannot delete TUS partial upload {UploadId}. StorageKey is missing.",
+                    upload.Id);
+            }
+            else
+            {
+                var tusStorageService = _keyedServiceProvider?
+                    .GetKeyedService(typeof(IStorageService), "tus-disk") as IStorageService;
+
+                if (tusStorageService is null)
+                {
+                    _logger.LogWarning(
+                        "No keyed TUS storage service is registered. Storage cleanup skipped for upload {UploadId}.",
+                        upload.Id);
+                }
+                else
+                {
+                    await tusStorageService.DeleteAsync(upload.StorageKey, cancellationToken);
                 }
             }
         }

@@ -20,6 +20,9 @@ public sealed class TusUploadController : ControllerBase
         _cancelUploadHandler = cancelUploadHandler;
     }
 
+    /// <remarks>
+    /// The actual TUS upload endpoint is <c>/upload/tus</c> and is handled by tusdotnet middleware.
+    /// </remarks>
     [HttpPost("tus/register")]
     [ProducesResponseType(typeof(UploadDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
