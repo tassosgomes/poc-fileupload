@@ -6,6 +6,7 @@ namespace UploadPoc.Application.Validators;
 public sealed class RegisterUploadValidator : AbstractValidator<RegisterUploadCommand>
 {
     private static readonly string[] AllowedScenarios = ["TUS", "MINIO"];
+    private const long MaxFileSizeBytes = 250L * 1024 * 1024 * 1024;
 
     public RegisterUploadValidator()
     {
@@ -14,7 +15,9 @@ public sealed class RegisterUploadValidator : AbstractValidator<RegisterUploadCo
             .MaximumLength(500);
 
         RuleFor(command => command.FileSizeBytes)
-            .GreaterThan(0);
+            .GreaterThan(0)
+            .LessThanOrEqualTo(MaxFileSizeBytes)
+            .WithMessage("File size must not exceed 250 GB.");
 
         RuleFor(command => command.ContentType)
             .NotEmpty()
