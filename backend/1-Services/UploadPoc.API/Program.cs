@@ -16,6 +16,7 @@ using UploadPoc.Domain.Events;
 using UploadPoc.API.Middleware;
 using UploadPoc.API.Services;
 using UploadPoc.Application.Commands;
+using UploadPoc.Application.Consumers;
 using UploadPoc.Application.Dtos;
 using UploadPoc.Application.Handlers;
 using UploadPoc.Application.Validators;
@@ -151,12 +152,15 @@ builder.Services.AddScoped<RegisterUploadHandler>();
 builder.Services.AddScoped<InitiateMinioUploadHandler>();
 builder.Services.AddScoped<CompleteUploadHandler>();
 builder.Services.AddScoped<CancelUploadHandler>();
+builder.Services.AddScoped<UploadCompletedConsumer>();
 builder.Services.AddScoped<IValidator<RegisterUploadCommand>, RegisterUploadValidator>();
 builder.Services.AddScoped<IValidator<CompleteMinioRequest>, CompleteMinioValidator>();
 builder.Services.AddSingleton<IChecksumService, Sha256ChecksumService>();
 builder.Services.AddSingleton<MinioStorageService>();
 builder.Services.AddSingleton<IStorageService>(serviceProvider => serviceProvider.GetRequiredService<MinioStorageService>());
 builder.Services.AddKeyedSingleton<IStorageService, TusDiskStorageService>("tus-disk");
+builder.Services.AddKeyedSingleton<IStorageService>("minio", static (serviceProvider, _) =>
+    serviceProvider.GetRequiredService<MinioStorageService>());
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddHostedService<RabbitMqConsumerHostedService>();
 

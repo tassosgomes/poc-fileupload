@@ -1,5 +1,5 @@
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,7 +13,8 @@ namespace UploadPoc.Infra.Messaging;
 
 public sealed class RabbitMqConsumerHostedService : BackgroundService
 {
-    private const int MaxDeliveryCount = 3;
+    private const int MaxDeliveryAttempts = 3;
+    private const string DeliveryCountHeaderName = "x-delivery-count";
 
     private readonly ILogger<RabbitMqConsumerHostedService> _logger;
     private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -57,8 +58,6 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
                 {
                     EnsureConnectionAndInfrastructure();
                 }
-
-                EnsureIntegrityHandlerRegistered();
 
                 _logger.LogInformation("RabbitMQ consumer connected and waiting for messages.");
 
@@ -122,8 +121,7 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
 
         try
         {
-            var payload = Encoding.UTF8.GetString(eventArgs.Body.ToArray());
-            var uploadCompletedEvent = JsonSerializer.Deserialize<UploadCompletedEvent>(payload, _serializerOptions);
+            var uploadCompletedEvent = JsonSerializer.Deserialize<UploadCompletedEvent>(eventArgs.Body.Span, _serializerOptions);
 
             if (uploadCompletedEvent is null)
             {
@@ -131,75 +129,125 @@ public sealed class RabbitMqConsumerHostedService : BackgroundService
             }
 
             using var scope = _serviceScopeFactory.CreateScope();
-            var handler = scope.ServiceProvider.GetRequiredService<IIntegrityCheckHandler>();
+            var consumer = scope.ServiceProvider.GetRequiredService<UploadCompletedConsumer>();
 
-            await handler.HandleAsync(uploadCompletedEvent, cancellationToken);
+            await consumer.ProcessAsync(uploadCompletedEvent, cancellationToken);
 
             _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
         }
         catch (Exception exception)
         {
-            var deliveryCount = GetDeliveryCount(eventArgs.BasicProperties);
+            var currentAttempt = GetCurrentDeliveryAttempt(eventArgs.BasicProperties?.Headers);
+            if (currentAttempt < MaxDeliveryAttempts)
+            {
+                var nextAttempt = currentAttempt + 1;
+
+                try
+                {
+                    PublishRetryMessage(eventArgs, nextAttempt);
+                    _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+
+                    _logger.LogWarning(
+                        exception,
+                        "Error processing upload.completed message. DeliveryTag={DeliveryTag}. Retrying attempt {NextAttempt}/{MaxDeliveryAttempts}.",
+                        eventArgs.DeliveryTag,
+                        nextAttempt,
+                        MaxDeliveryAttempts);
+
+                    return;
+                }
+                catch (Exception retryException)
+                {
+                    _logger.LogError(
+                        retryException,
+                        "Failed to enqueue retry for upload.completed message. DeliveryTag={DeliveryTag}.",
+                        eventArgs.DeliveryTag);
+                }
+            }
 
             _logger.LogError(
                 exception,
-                "Error processing upload.completed message. DeliveryCount={DeliveryCount}.",
-                deliveryCount);
-
-            if (deliveryCount < MaxDeliveryCount)
-            {
-                RepublishWithIncrementedDeliveryCount(eventArgs, deliveryCount + 1);
-                _channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
-                return;
-            }
+                "Error processing upload.completed message. DeliveryTag={DeliveryTag}. Max attempts reached ({MaxDeliveryAttempts}), sending to DLQ.",
+                eventArgs.DeliveryTag,
+                MaxDeliveryAttempts);
 
             _channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: false);
         }
     }
 
-    private void EnsureIntegrityHandlerRegistered()
-    {
-        using var scope = _serviceScopeFactory.CreateScope();
-        _ = scope.ServiceProvider.GetRequiredService<IIntegrityCheckHandler>();
-    }
-
-    private static int GetDeliveryCount(IBasicProperties? basicProperties)
-    {
-        if (basicProperties?.Headers is null || !basicProperties.Headers.TryGetValue("x-delivery-count", out var value))
-        {
-            return 1;
-        }
-
-        return value switch
-        {
-            byte[] bytes when int.TryParse(Encoding.UTF8.GetString(bytes), out var parsed) => parsed,
-            int intValue => intValue,
-            long longValue => (int)longValue,
-            _ => 1
-        };
-    }
-
-    private void RepublishWithIncrementedDeliveryCount(BasicDeliverEventArgs eventArgs, int deliveryCount)
+    private void PublishRetryMessage(BasicDeliverEventArgs eventArgs, int nextAttempt)
     {
         if (_channel is null)
         {
-            return;
+            throw new InvalidOperationException("RabbitMQ channel is not initialized for retry publishing.");
         }
 
-        var properties = _channel.CreateBasicProperties();
-        properties.Persistent = true;
-        properties.ContentType = "application/json";
-        properties.Headers = new Dictionary<string, object>
-        {
-            ["x-delivery-count"] = deliveryCount.ToString()
-        };
+        var retryProperties = _channel.CreateBasicProperties();
+        var originalProperties = eventArgs.BasicProperties;
+
+        retryProperties.Persistent = originalProperties?.Persistent ?? true;
+        retryProperties.ContentType = originalProperties?.ContentType ?? "application/json";
+        retryProperties.ContentEncoding = originalProperties?.ContentEncoding;
+        retryProperties.CorrelationId = originalProperties?.CorrelationId;
+        retryProperties.MessageId = originalProperties?.MessageId;
+        retryProperties.Type = originalProperties?.Type;
+        retryProperties.AppId = originalProperties?.AppId;
+        retryProperties.Timestamp = originalProperties?.Timestamp ?? default;
+        retryProperties.Headers = CloneHeaders(originalProperties?.Headers);
+        retryProperties.Headers[DeliveryCountHeaderName] = nextAttempt;
 
         _channel.BasicPublish(
             exchange: RabbitMqInfrastructureSetup.UploadEventsExchange,
             routingKey: RabbitMqInfrastructureSetup.UploadCompletedRoutingKey,
-            mandatory: true,
-            basicProperties: properties,
+            mandatory: false,
+            basicProperties: retryProperties,
             body: eventArgs.Body);
+    }
+
+    private static Dictionary<string, object> CloneHeaders(IDictionary<string, object>? headers)
+    {
+        var clonedHeaders = new Dictionary<string, object>(StringComparer.Ordinal);
+        if (headers is null)
+        {
+            return clonedHeaders;
+        }
+
+        foreach (var (key, value) in headers)
+        {
+            clonedHeaders[key] = value;
+        }
+
+        return clonedHeaders;
+    }
+
+    private static int GetCurrentDeliveryAttempt(IDictionary<string, object>? headers)
+    {
+        if (headers is null || !headers.TryGetValue(DeliveryCountHeaderName, out var rawValue))
+        {
+            return 1;
+        }
+
+        return ParseDeliveryAttempt(rawValue);
+    }
+
+    private static int ParseDeliveryAttempt(object value)
+    {
+        var parsedAttempt = value switch
+        {
+            byte byteValue => byteValue,
+            sbyte sbyteValue => sbyteValue,
+            short shortValue => shortValue,
+            ushort ushortValue => ushortValue,
+            int intValue => intValue,
+            uint uintValue => (int)uintValue,
+            long longValue => (int)longValue,
+            ulong ulongValue => (int)ulongValue,
+            string stringValue when int.TryParse(stringValue, out var stringAttempt) => stringAttempt,
+            byte[] bytesValue when int.TryParse(Encoding.UTF8.GetString(bytesValue), out var bytesAttempt) => bytesAttempt,
+            _ => 1
+        };
+
+        return parsedAttempt < 1 ? 1 : parsedAttempt;
     }
 
     private void EnsureConnectionAndInfrastructure()
