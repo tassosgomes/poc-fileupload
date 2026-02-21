@@ -10,12 +10,15 @@ using Serilog.Formatting.Compact;
 using UploadPoc.API.Middleware;
 using UploadPoc.API.Services;
 using UploadPoc.Application.Commands;
+using UploadPoc.Application.Dtos;
 using UploadPoc.Application.Handlers;
 using UploadPoc.Application.Validators;
 using UploadPoc.Domain.Interfaces;
 using UploadPoc.Infra.Messaging;
 using UploadPoc.Infra.Persistence;
 using UploadPoc.Infra.Persistence.Repositories;
+using UploadPoc.Infra.Services;
+using UploadPoc.Infra.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -138,8 +141,14 @@ builder.Services.AddHealthChecks()
 
 builder.Services.AddScoped<IFileUploadRepository, FileUploadRepository>();
 builder.Services.AddScoped<RegisterUploadHandler>();
+builder.Services.AddScoped<InitiateMinioUploadHandler>();
+builder.Services.AddScoped<CompleteUploadHandler>();
 builder.Services.AddScoped<CancelUploadHandler>();
 builder.Services.AddScoped<IValidator<RegisterUploadCommand>, RegisterUploadValidator>();
+builder.Services.AddScoped<IValidator<CompleteMinioRequest>, CompleteMinioValidator>();
+builder.Services.AddSingleton<IChecksumService, Sha256ChecksumService>();
+builder.Services.AddSingleton<MinioStorageService>();
+builder.Services.AddSingleton<IStorageService>(serviceProvider => serviceProvider.GetRequiredService<MinioStorageService>());
 builder.Services.AddSingleton<IEventPublisher, RabbitMqPublisher>();
 builder.Services.AddHostedService<RabbitMqConsumerHostedService>();
 
@@ -151,6 +160,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+
+    var minioStorageService = scope.ServiceProvider.GetRequiredService<MinioStorageService>();
+    await minioStorageService.ConfigureBucketAsync(CancellationToken.None);
 }
 
 app.UseSwagger();

@@ -35,11 +35,6 @@ public sealed class CancelUploadHandler
 
         if (upload.UploadScenario.Equals("MINIO", StringComparison.OrdinalIgnoreCase))
         {
-            // TODO(tasks 7/8): when concrete MinIO storage service is available, call AbortMultipartUpload for pending multipart uploads.
-        }
-
-        if (!string.IsNullOrWhiteSpace(upload.StorageKey))
-        {
             if (_storageService is null)
             {
                 _logger.LogWarning(
@@ -48,7 +43,21 @@ public sealed class CancelUploadHandler
             }
             else
             {
-                await _storageService.DeleteAsync(upload.StorageKey, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(upload.StorageKey)
+                    && !string.IsNullOrWhiteSpace(upload.MinioUploadId))
+                {
+                    await _storageService.AbortMultipartUploadAsync(
+                        _storageService.BucketName,
+                        upload.StorageKey,
+                        upload.MinioUploadId,
+                        cancellationToken);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Cannot abort MinIO multipart upload {UploadId}. StorageKey or MinioUploadId is missing.",
+                        upload.Id);
+                }
             }
         }
 
