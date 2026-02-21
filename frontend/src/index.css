@@ -141,3 +141,79 @@ td {
   padding: 8px;
   text-align: left;
 }
+
+.tus-upload-page {
+  display: grid;
+  gap: 16px;
+}
+
+.file-input-hidden {
+  display: none;
+}
+
+.dropzone {
+  align-items: center;
+  background: #f9fafb;
+  border: 2px dashed #93c5fd;
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 24px;
+}
+
+.dropzone[aria-disabled='true'] {
+  opacity: 0.65;
+}
+
+.dropzone-active {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
+.dropzone p {
+  margin: 0;
+}
+
+.file-summary {
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.file-summary p {
+  margin: 0;
+}
+
+.upload-progress-section {
+  display: grid;
+  gap: 12px;
+}
+
+.upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.status-success,
+.status-error,
+.status-neutral {
+  font-weight: 600;
+  margin: 0;
+}
+
+.status-success {
+  color: #059669;
+}
+
+.status-error {
+  color: #dc2626;
+}
+
+.status-neutral {
+  color: #4b5563;
+}
