@@ -1,0 +1,38 @@
+## Deploy: kubectl apply -f k8s/ingress.yaml -n upload-poc
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: upload-poc-ingress
+  namespace: upload-poc
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: upload-poc.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: upload-poc-backend
+                port:
+                  number: 80
+          - path: /upload/tus
+            pathType: Prefix
+            backend:
+              service:
+                name: upload-poc-backend
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: upload-poc-frontend
+                port:
+                  number: 80

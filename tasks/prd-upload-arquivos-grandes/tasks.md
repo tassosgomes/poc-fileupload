@@ -47,7 +47,7 @@ Kubernetes YAMLs e testes unitários. Podem ser executadas em **paralelo**.
 - [x] 13.0 Frontend — Upload TUS
 - [x] 14.0 Frontend — Upload MinIO
 - [x] 15.0 Frontend — Listagem e Download
-- [ ] 16.0 Kubernetes YAMLs (F07)
+- [x] 16.0 Kubernetes YAMLs (F07)
 - [ ] 17.0 Testes Unitários
 
 ## Análise de Paralelização

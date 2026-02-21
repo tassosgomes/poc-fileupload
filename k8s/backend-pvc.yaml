@@ -1,0 +1,13 @@
+## Deploy: kubectl apply -f k8s/backend-pvc.yaml -n upload-poc
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: upload-poc-tus-storage
+  namespace: upload-poc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 500Gi

@@ -1,0 +1,16 @@
+## Deploy: kubectl apply -f k8s/backend-service.yaml -n upload-poc
+apiVersion: v1
+kind: Service
+metadata:
+  name: upload-poc-backend
+  namespace: upload-poc
+  labels:
+    app: upload-poc-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: upload-poc-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

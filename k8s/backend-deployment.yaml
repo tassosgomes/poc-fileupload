@@ -1,0 +1,84 @@
+## Deploy: kubectl apply -f k8s/backend-deployment.yaml -n upload-poc
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upload-poc-backend
+  namespace: upload-poc
+  labels:
+    app: upload-poc-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: upload-poc-backend
+  template:
+    metadata:
+      labels:
+        app: upload-poc-backend
+    spec:
+      containers:
+        - name: backend
+          image: upload-poc-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: upload-poc-config
+          env:
+            - name: Jwt__Secret
+              valueFrom:
+                secretKeyRef:
+                  name: upload-poc-secrets
+                  key: jwt-secret
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: upload-poc-secrets
+                  key: db-connection-string
+            - name: MinIO__AccessKey
+              valueFrom:
+                secretKeyRef:
+                  name: upload-poc-secrets
+                  key: minio-access-key
+            - name: MinIO__SecretKey
+              valueFrom:
+                secretKeyRef:
+                  name: upload-poc-secrets
+                  key: minio-secret-key
+            - name: RabbitMQ__Password
+              valueFrom:
+                secretKeyRef:
+                  name: upload-poc-secrets
+                  key: rabbitmq-password
+          volumeMounts:
+            - name: tus-storage
+              mountPath: /app/uploads
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: tus-storage
+          persistentVolumeClaim:
+            claimName: upload-poc-tus-storage

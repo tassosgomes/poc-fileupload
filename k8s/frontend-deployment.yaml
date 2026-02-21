@@ -1,0 +1,48 @@
+## Deploy: kubectl apply -f k8s/frontend-deployment.yaml -n upload-poc
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: upload-poc-frontend
+  namespace: upload-poc
+  labels:
+    app: upload-poc-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: upload-poc-frontend
+  template:
+    metadata:
+      labels:
+        app: upload-poc-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: upload-poc-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

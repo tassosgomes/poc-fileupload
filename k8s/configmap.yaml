@@ -1,0 +1,17 @@
+## Deploy: kubectl apply -f k8s/configmap.yaml -n upload-poc
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: upload-poc-config
+  namespace: upload-poc
+data:
+  MinIO__Endpoint: "minio.minio.svc.cluster.local:9000"
+  MinIO__BucketName: "uploads"
+  RabbitMQ__Host: "rabbitmq.rabbitmq.svc.cluster.local"
+  RabbitMQ__Username: "poc"
+  TusStorage__Path: "/app/uploads"
+  TusStorage__MaxAllowedUploadSizeInBytes: "322122547200"
+  UploadTimeouts__ProxyReadSeconds: "3600"
+  UploadTimeouts__ProxySendSeconds: "3600"
+  UploadTimeouts__ProxyConnectSeconds: "60"
+  UploadTimeouts__PendingHours: "24"
