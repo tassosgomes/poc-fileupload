@@ -21,20 +21,93 @@ body {
 
 .app-header {
   align-items: center;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
   display: flex;
+  gap: 16px;
   justify-content: space-between;
   margin-bottom: 24px;
+  padding: 16px;
 }
 
-.app-header nav {
+.app-title {
+  color: #111827;
+  font-size: 1.125rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-nav {
   display: flex;
   gap: 12px;
 }
 
-.app-header a {
-  color: #2563eb;
+.app-nav a {
+  border-radius: 6px;
+  color: #1d4ed8;
   font-weight: 600;
+  padding: 6px 8px;
   text-decoration: none;
+}
+
+.app-nav a.active {
+  background: #dbeafe;
+}
+
+main {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  min-height: 360px;
+  padding: 20px;
+}
+
+.auth-card {
+  margin: 0 auto;
+  max-width: 360px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+input,
+button {
+  border: 1px solid #9ca3af;
+  border-radius: 8px;
+  font: inherit;
+  padding: 10px;
+}
+
+button {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.auth-error {
+  color: #b91c1c;
+  margin: 0;
+}
+
+.progress-wrapper {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+}
+
+.progress-label {
+  margin: 0;
 }
 
 .progress {
@@ -48,6 +121,12 @@ body {
 .progress-fill {
   background: #10b981;
   height: 100%;
+  transition: width 0.2s ease;
+}
+
+.progress-value {
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 table {

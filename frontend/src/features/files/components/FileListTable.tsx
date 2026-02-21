@@ -16,7 +16,7 @@ export function FileListTable() {
         <tbody>
           {files.map((file) => (
             <tr key={file.id}>
-              <td>{file.name}</td>
+              <td>{file.fileName}</td>
               <td>{file.status}</td>
             </tr>
           ))}

@@ -1,19 +1,36 @@
-import { Link } from 'react-router-dom'
-import type { PropsWithChildren } from 'react'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/features/auth/hooks/useAuth'
 
-export function Layout({ children }: PropsWithChildren) {
+export function Layout() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>Upload POC</h1>
-        <nav>
-          <Link to="/login">Login</Link>
-          <Link to="/upload/tus">Upload TUS</Link>
-          <Link to="/upload/minio">Upload MinIO</Link>
-          <Link to="/files">Files</Link>
+        <Link className="app-title" to="/upload/tus">
+          Upload POC
+        </Link>
+
+        <nav className="app-nav">
+          <NavLink to="/upload/tus">Upload TUS</NavLink>
+          <NavLink to="/upload/minio">Upload MinIO</NavLink>
+          <NavLink to="/files">Arquivos</NavLink>
         </nav>
+
+        <button onClick={handleLogout} type="button">
+          Logout
+        </button>
       </header>
-      <main>{children}</main>
+
+      <main>
+        <Outlet />
+      </main>
     </div>
   )
 }

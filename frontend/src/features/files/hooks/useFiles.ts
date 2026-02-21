@@ -1,5 +1,5 @@
-import type { FileItem } from '@/types'
+import type { UploadDto } from '@/types'
 
-export function useFiles(): FileItem[] {
+export function useFiles(): UploadDto[] {
   return []
 }
